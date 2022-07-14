@@ -25,7 +25,7 @@ def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
 
     # load data
     if dset == 'fmnist':
-        x_train, y_train, y_train_oh, x_test, y_test = load_fmnist(sample_sz=0.1)
+        x_train, y_train, y_train_oh, x_test, y_test = load_fmnist(root='../data/fmnist', sample_sz=0.1)
     else:
         x_train, y_train, y_train_oh, x_test, y_test = load_skl_dset(dset, task=task)
 

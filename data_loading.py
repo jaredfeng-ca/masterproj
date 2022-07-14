@@ -39,22 +39,22 @@ def load_skl_dset(dset=None, task=None, test_split=0.5, sample_sz=None):
     return x_train, y_train, y_train_oh, x_test, y_test
 
 
-def stratified_sampling(sample_sz=0.1, x, y):
-    assert isinstance(x, np.array()), "Convert x to np array first!"
-    assert isinstance(y, np.array()), "Convert y to np array first!"
+def stratified_sampling(x, y, sample_sz=0.1):
+    assert isinstance(x, np.ndarray), "Convert x to np array first!"
+    assert isinstance(y, np.ndarray), "Convert y to np array first!"
     _, x, _, y = train_test_split(x, y, test_size=sample_sz, stratify=y)
     return x, y
 
 
-def load_fmnist(root="./fmnist", sample_sz=0.1):
+def load_fmnist(root="../data/fmnist", sample_sz=0.1):
     train_data = FashionMNIST(
-        root="./fmnist",
+        root=root,
         train=True,
         download=True
     )
 
     test_data = FashionMNIST(
-        root="./fmnist",
+        root=root,
         train=False,
         download=True
     )
@@ -67,8 +67,7 @@ def load_fmnist(root="./fmnist", sample_sz=0.1):
 
     x_train = x_train.numpy()
     y_train = y_train.numpy()
-    _, x_train, _, y_train = train_test_split(x_train, y_train,
-                                              test_size=sample_sz, stratify=y_train)
+    x_train, y_train = stratified_sampling(x_train, y_train, 0.1)
 
     x_train = torch.Tensor(x_train).to(device)
     x_train = x_train.transpose(0, 1)
@@ -81,4 +80,5 @@ def load_fmnist(root="./fmnist", sample_sz=0.1):
 
 if __name__ == '__main__':
     print('loading some data')
-    _ = load_skl_dset('wine', 'class', 0.5)
+    #_ = load_skl_dset('wine', 'class', 0.5)
+    _ = load_fmnist(root='../data/fmnist', sample_sz=0.1)
