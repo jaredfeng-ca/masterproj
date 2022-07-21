@@ -7,10 +7,13 @@ from seed import seed_everything
 import torch
 import numpy as np
 import gc
+from matplotlib import pyplot as plt
+import pandas as pd
+import seaborn as sns
 
 
 def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
-                          task=None, head_type=None, met=None):
+                          task=None, head_type=None, met=None, kern_approx=None):
     """
     A seeded single-iteration workflow of data loading, kernel calculation,
         dimensionality reduction, model fit and evaluate
@@ -30,9 +33,12 @@ def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
         x_train, y_train, y_train_oh, x_test, y_test = load_skl_dset(dset, task=task)
 
     # kernel calculation with gpytorch
-    B, K, K_test, n = get_kerns(x_train, x_test, oh_labels=y_train_oh, task=task)
+    B, K, K_test, n = get_kerns(x_train, x_test, labels=y_train, oh_labels=y_train_oh, task=task)
 
     # dimensionality reduction
+    if len(algo_name.split("+")) > 1:
+        [algo_name, kern_approx] = algo_name.split("+")
+
     if algo_name == 'pca':
         z_train, z_test = pca(x_train, x_test, odim)
     elif algo_name == 'spca':
@@ -40,9 +46,9 @@ def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
     elif algo_name == 'kspca':
         z_train, z_test = kspca(K, K_test, B, odim)
     elif algo_name == 'srp':
-        z_train, z_test = srp(x_train, x_test, y_train_oh, output_dim=odim)
+        z_train, z_test = srp(x_train, x_test, y_train, y_train_oh, kern_approx=kern_approx, output_dim=odim, task=task)
     elif algo_name == 'ksrp':
-        z_train, z_test = ksrp(K, K_test, y_train_oh, output_dim=odim)
+        z_train, z_test = ksrp(K, K_test, y_train, y_train_oh, kern_approx=kern_approx, output_dim=odim, task=task)
     else:
         raise NotImplementedError('dimension reduction algorithm not implemented yet!')
 
@@ -63,4 +69,45 @@ def multi_trial(num_trials=10, odim=2, algo_name=None, dset=None,
 
     return np.mean(results)
 
+
+def experiment(trials, max_out_dim, dset, task, head, metric, algos):
+    out_dims = np.arange(1, max_out_dim+1)
+    res_mat = np.zeros((len(algos), max_out_dim))
+
+    for j, algo in enumerate(algos):
+        algo_results = np.zeros(max_out_dim)
+        for i, dim in enumerate(out_dims):
+            res = multi_trial(num_trials=trials, odim=dim, algo_name=algo,
+                              dset=dset, task=task, head_type=head, met=metric)
+            algo_results[i] = res
+        res_mat[j] = algo_results
+
+    return res_mat.transpose(), out_dims
+
+
+def experiment2(trials, out_dims, dset, task, head, metric, algos):
+    res_mat = np.zeros((len(algos), len(out_dims)))
+
+    for j, algo in enumerate(algos):
+        algo_results = np.zeros(len(out_dims))
+        for i, dim in enumerate(out_dims):
+            res = multi_trial(num_trials=trials, odim=dim, algo_name=algo,
+                              dset=dset, task=task, head_type=head, met=metric)
+            algo_results[i] = res
+        res_mat[j] = algo_results
+
+    return res_mat.transpose(), out_dims
+
+
+def plot_exp_result(res_mat, out_dims, dset, head, metric, algos):
+    # change result array into a df for sns plot
+    res_df = pd.DataFrame(res_mat, columns=algos, index=out_dims)
+    res_df['dimensions'] = out_dims
+
+    sns.set_theme()
+    sns.set(font_scale=1.2)
+    for algo in algos:
+        plot = sns.lineplot(x='dimensions', y=algo, data=res_df, lw=2.5)
+    plt.legend(labels=algos, facecolor='white')
+    plot.set(ylabel=metric, title = f'{dset} dataset with model {head}, by dimensions');
 

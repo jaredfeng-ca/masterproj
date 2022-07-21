@@ -26,11 +26,9 @@ def pca(x_train, x_test, output_dim=2):
 
         # encode training data
         z_train = U.t() @ x_train
-        z_train = z_train
 
         # encode test data
         z_test = U.t() @ x_test
-        z_test = z_test
 
     return z_train, z_test
 
@@ -55,11 +53,9 @@ def spca(x_train, x_test, B, output_dim=2):
 
         # encode training data
         z_train = U.t() @ x_train
-        z_train = z_train
 
         # encode test data
         z_test = U.t() @ x_test
-        z_test = z_test
 
     return z_train, z_test
 
@@ -84,78 +80,49 @@ def kspca(K, K_test, B, output_dim=2):
 
         # encode training data
         z_train = U.t() @ K
-        z_train = z_train
 
         # encode test data
         z_test = U.t() @ K_test
-        z_test = z_test
 
     return z_train, z_test
 
 
-def srp(x_train, x_test, y_train_oh, sigma=1, output_dim=2):
-
+def srp(x_train, x_test, y_train=None, y_train_oh=None, kern_approx=None, output_dim=2, task=None):
+    n = x_train.size(1)
     with torch.no_grad():
-        d = x_train.size(0)
-        k = output_dim
-        p = y_train_oh.size(0)
-        n = x_train.size(1)
         H = torch.eye(n) - 1 / n * torch.ones(n, n)
         H = H.to(device)
-        sigma = 1
 
-        # approximate Psi
-        W = torch.randn(k, p) / sigma
-        W = W.to(device)
+        if kern_approx == 'rff' or kern_approx is None:
+            Psi = rnd_fourier_feat(y_train, y_train_oh, output_dim, task)
+        else:
+            raise NotImplementedError("Kernel approximation method not implemented yet!")
 
-        b = 2 * torch.pi * torch.rand(k, 1)
-        b = b.to(device)
-
-        ones = torch.ones(1, n).to(device)
-
-        Psi = np.sqrt(1 / k) * torch.cos(W @ y_train_oh.float() + b @ ones)
-
-        # encode training data
+        # encode training data. output size: (2k, n)
         z_train = Psi @ H @ x_train.t() @ x_train
-        z_train = z_train
-
-        # encode test data
+        # encode test data. output size: (2k, n_test)
         z_test = Psi @ H @ x_train.t() @ x_test
-        z_test = z_test
-
     return z_train, z_test
 
 
-def ksrp(K, K_test, y_train_oh, sigma=1, output_dim=2):
-
+def ksrp(K, K_test, y_train=None, y_train_oh=None, kern_approx=None, output_dim=2, task=None):
+    n = K.size(0)
     with torch.no_grad():
-        k = output_dim
-        p = y_train_oh.size(0)
-        n = K.size(0)
         H = torch.eye(n) - 1 / n * torch.ones(n, n)
         H = H.to(device)
-        sigma = 1
 
-        # approximate Psi
-        W = torch.randn(k, p) / sigma
-        W = W.to(device)
+        if kern_approx == 'rff' or kern_approx is None:
+            Psi = rnd_fourier_feat(y_train, y_train_oh, output_dim, task)
+        else:
+            raise NotImplementedError("Kernel approximation not implemented yet!")
 
-        b = 2 * torch.pi * torch.rand(k, 1)
-        b = b.to(device)
-
-        ones = torch.ones(1, n).to(device)
-
-        Psi = np.sqrt(1 / k) * torch.cos(W @ y_train_oh.float() + b @ ones)
-
-        # encode training data
+        # encode training data. output size: (2k, n)
         z_train = Psi @ H @ K
-        z_train = z_train
-
-        # encode test data
+        # encode test data. output size: (2k, n_test)
         z_test = Psi @ H @ K_test
-        z_test = z_test
-
     return z_train, z_test
+
+# def ksrp_approx():
 
 
 if __name__ == '__main__':

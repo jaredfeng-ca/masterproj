@@ -1,5 +1,5 @@
 import warnings
-from sklearn import linear_model, metrics
+from sklearn import linear_model, metrics, neighbors
 from data_loading import *
 from kernels import *
 from dim_reductions import *
@@ -31,6 +31,10 @@ def fit_and_eval(z_train, y_train, z_test, y_test, met=None, head_type=None,
         head = linear_model.LogisticRegression()
     elif head_type == 'linreg':
         head = linear_model.LinearRegression()
+    elif head_type == 'knncls':
+        head = neighbors.KNeighborsClassifier()
+    elif head_type == 'knnreg':
+        head = neighbors.KNeighborsRegressor()
     else:
         raise NotImplementedError('model type not implemented yet!')
 
