@@ -40,13 +40,14 @@ def rnd_fourier_feat(y_train=None, y_train_oh=None, output_dim=2, task=None, sig
     with torch.no_grad():
         if task == 'class':
             p = y_train_oh.size(0)
+            n = y_train_oh.size(1)
         elif task == 'reg':
             p = 1
+            n = y_train.size(0)
         else:
             raise Exception("Please enter task type!")
 
         k = output_dim
-        n = y_train.size(0)
 
         # approximate Psi
         sigma = 1
@@ -55,12 +56,11 @@ def rnd_fourier_feat(y_train=None, y_train_oh=None, output_dim=2, task=None, sig
         b = 2 * torch.pi * torch.rand(k, 1)
         b = b.to(device)
         ones = torch.ones(1, n).to(device)
-        y_train = y_train.view(1, -1)
 
         if task == 'class':
             affine = W @ y_train_oh.float() + b @ ones
         elif task == 'reg':
-            affine = W @ y_train.float() + b @ ones
+            affine = W @ y_train.view(1, -1).float() + b @ ones
 
         Psi = np.sqrt(2 / k) * torch.cat((torch.cos(affine), torch.sin(affine)), dim=0)
     return Psi

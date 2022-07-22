@@ -1,10 +1,7 @@
 import torch
 from torch import nn
-import warnings
-import numpy as np
 from data_loading import *
 from kernels import *
-from dim_reductions import *
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -12,46 +9,82 @@ device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
 class SRPLayer(nn.Module):
-    def __init__(self, kern_approx=None, out_dim=None, task=None):
+    def __init__(self, out_dim=None, kern_approx=None, task=None):
         super(SRPLayer, self).__init__()
-        self.kern_approx = kern_approx
+        self.kern_approx = kern_approx if kern_approx is not None else "rff"
+        assert out_dim > 0, "Please provide a positive integer for output dimension!"
         self.out_dim = out_dim
         self.task = task
         self.Psi = None
 
-    def forward(self, x, x_test=None, y_train=None, y_train_oh=None, train=True):
+    def __repr__(self):
+        return f"SRPLayer(out_dim={self.out_dim}, kern_approx={self.kern_approx}, task={self.task})"
+
+    def forward(self, x, x_test=None, y_train=None, y_train_oh=None):
         with torch.no_grad():
             # shape of x: (# of dims, # of examples)
             n = x.size(1)
             H = torch.eye(n) - 1/n * torch.ones(n, n)
-            if train:
-                if self.kern_approx == 'rff' or self.kern_approx is None:
+            H = H.to(device)
+            if self.training:
+                if self.kern_approx == "rff":
                     self.Psi = rnd_fourier_feat(y_train, y_train_oh, self.out_dim, self.task)
                 else:
                     raise NotImplementedError("Kernel approximation method not implemented yet!")
                 out = self.Psi @ H @ x.t() @ x
             else:
-                out = self.Psi @ H @ x.t() @ x_test
+                assert self.Psi is not None, "Please train the network first!"
+                out = self.Psi @ H @ x.t() @ x, self.Psi @ H @ x.t() @ x_test
         return out
 
 
 class SRPNet(nn.Module):
-    def __init__(self, task=None):
+    def __init__(self, layer_dims=None, kern_approx=None, task=None):
         super(SRPNet, self).__init__()
-        self.srp1 = SRPLayer(kern_approx='rff', out_dim=16, task=task)
-        self.srp2 = SRPLayer(kern_approx='rff', out_dim=4, task=task)
-        self.srp1.requires_grad_(False)
-        self.srp2.requires_grad_(False)
+        assert layer_dims is not None, "Please provide dimension (in integers) of each layer in a list, " \
+                                       "e.g. [16, 8, 4] for a 3-layer SRPNet."
+        self.num_layers = len(layer_dims)
+        self.srp_layers = nn.ModuleList([SRPLayer(out_dim=layer_dim, kern_approx=kern_approx, task=task)
+                                        for layer_dim in layer_dims])
+        self.training = True
+        for srp_layer in self.srp_layers:
+            srp_layer.requires_grad_(False)
 
-    def forward(self, x, x_test=None, y_train=None, y_train_oh=None, train=True):
-        if train:
-            assert y_train is not None or y_train_oh is not None, "please provide labels!"
+    def forward(self, x_train, x_test=None, y_train=None, y_train_oh=None):
+        if self.training:
+            assert y_train is not None or y_train_oh is not None, "Please provide labels!"
+            z_train = x_train
+            for srp_layer in self.srp_layers:
+                z_train = srp_layer(z_train, y_train=y_train, y_train_oh=y_train_oh)
+            return z_train
         else:
-            assert x_test is not None, "please provide test data!"
-        z = self.srp1(x, x_test, y_train, y_train_oh, train)
-        z = self.srp2(z, x_test, y_train, y_train_oh, train)
-        return z
+            assert x_test is not None, "Please provide test data!"
+            z_train, z_test = x_train, x_test
+            for srp_layer in self.srp_layers:
+                z_train, z_test = srp_layer(z_train, x_test=z_test)
+            return z_test
+
+
+def srpnn_dim_reduct(x_train, x_test, y_train=None, y_train_oh=None, kern_approx=None,
+                     layer_dims=None, task=None):
+    net = SRPNet(layer_dims=layer_dims, kern_approx=kern_approx, task=task).to(device)
+    net.train()
+    z_train = net(x_train, y_train=y_train, y_train_oh=y_train_oh)
+    net.eval()
+    z_test = net(x_train, x_test=x_test)
+    return z_train, z_test
 
 
 if __name__ == "__main__":
-    net = SRPNet('class')
+    task = 'class'
+    dset = 'wine'
+    x_train, y_train, y_train_oh, x_test, y_test = load_skl_dset(dset, task, 0.3)
+    net = SRPNet(layer_dims=[16, 6, 1], task=task).to(device)
+    net.train()
+    z_train = net(x_train, y_train_oh=y_train_oh)
+    net.eval()
+    z_test = net(x_train, x_test=x_test)
+    print(net)
+    print(z_train.size())
+    print(z_test.size())
+

@@ -1,6 +1,7 @@
 from data_loading import *
 from kernels import *
 from dim_reductions import *
+from srp_nn import *
 from modeling import *
 from seed import seed_everything
 
@@ -36,8 +37,15 @@ def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
     B, K, K_test, n = get_kerns(x_train, x_test, labels=y_train, oh_labels=y_train_oh, task=task)
 
     # dimensionality reduction
-    if len(algo_name.split("+")) > 1:
+    if len(algo_name.split("+")) == 2:
         [algo_name, kern_approx] = algo_name.split("+")
+    elif len(algo_name.split("+")) == 3:
+        [algo_name, kern_approx, layer_dims] = algo_name.split("+")
+        if layer_dims == "0":
+            layer_dims = []
+        else:
+            layer_dims = [int(layer_dim) for layer_dim in layer_dims.split("_")]
+        layer_dims += [odim]
 
     if algo_name == 'pca':
         z_train, z_test = pca(x_train, x_test, odim)
@@ -46,9 +54,11 @@ def single_trial_workflow(seed=None, odim=None, algo_name=None, dset=None,
     elif algo_name == 'kspca':
         z_train, z_test = kspca(K, K_test, B, odim)
     elif algo_name == 'srp':
-        z_train, z_test = srp(x_train, x_test, y_train, y_train_oh, kern_approx=kern_approx, output_dim=odim, task=task)
+        z_train, z_test = srp(x_train, x_test, y_train, y_train_oh, kern_approx, odim, task)
     elif algo_name == 'ksrp':
-        z_train, z_test = ksrp(K, K_test, y_train, y_train_oh, kern_approx=kern_approx, output_dim=odim, task=task)
+        z_train, z_test = ksrp(K, K_test, y_train, y_train_oh, kern_approx, odim, task)
+    elif algo_name == 'srpnn':
+        z_train, z_test = srpnn_dim_reduct(x_train, x_test, y_train, y_train_oh, kern_approx, layer_dims, task)
     else:
         raise NotImplementedError('dimension reduction algorithm not implemented yet!')
 
